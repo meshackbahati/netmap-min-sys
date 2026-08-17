@@ -1,9 +1,9 @@
 [package]
 name = "netmap-min-sys"
-version = "0.2.2"
-edition = "2024"
+version = "0.3.0"
+edition = "2021"
 authors = ["Meshack Bahati Ouma <bahatikylemeshack@gmail.com>"]
-description = "Raw FFI bindings for Netmap"
+description = "Raw FFI bindings and helpers for Netmap"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Kyle6012/netmap-rs.git"
 keywords = ['networking', 'ffi', 'netmap']
@@ -11,9 +11,10 @@ categories = ["api-bindings"]
 
 [build-dependencies]
 bindgen = "0.71.1"
+cc = "1"
 
 [dependencies]
-libc = "0.2.172"
+libc = "0.2"
 
 [features]
 default = []
