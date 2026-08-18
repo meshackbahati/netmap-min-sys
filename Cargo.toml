@@ -1,11 +1,11 @@
 [package]
 name = "netmap-min-sys"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = ["Meshack Bahati Ouma <bahatikylemeshack@gmail.com>"]
 description = "Raw FFI bindings and helpers for Netmap"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/Kyle6012/netmap-rs.git"
+repository = "https://github.com/meshackbahati/netmap-min-sys.git"
 keywords = ['networking', 'ffi', 'netmap']
 categories = ["api-bindings"]
 
