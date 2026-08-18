@@ -6,18 +6,34 @@ fn main() {
     println!("cargo:rerun-if-env-changed=NETMAP_LOCATION");
     println!("cargo:rerun-if-env-changed=DISABLE_NETMAP_KERNEL");
 
+    // Declare the custom cfg used to gate out Netmap-dependent code.
+    println!("cargo:rustc-check-cfg=cfg(netmap_disabled)");
+
     // Allow disabling Netmap via env or feature flag.
     if cfg!(feature = "disable-netmap-kernel") || env::var("DISABLE_NETMAP_KERNEL").is_ok() {
-        let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-        fs::write(out_path.join("binding.rs"), "// empty, Netmap disabled\n")
-            .expect("Failed to write empty bindings.rs");
-        println!("cargo:warning=Netmap disabled; skipping bindgen");
+        write_empty("Netmap disabled; skipping bindgen");
         return;
     }
-
     let install_dir = env::var("NETMAP_LOCATION").unwrap_or_else(|_| "/usr/local".into());
     let include_dir = PathBuf::from(&install_dir).join("include");
     let lib_dir = PathBuf::from(&install_dir).join("lib");
+
+    // The published crate is built on hosts that never have the Netmap headers
+    // installed (crates.io, docs.rs). Detect that up front and degrade to an
+    // empty binding set instead of panicking inside bindgen, which would make
+    // `cargo publish` fail. Consumers that build against a real Netmap install
+    // set NETMAP_LOCATION (or install headers in /usr/local).
+    let header = include_dir.join("net").join("netmap_user.h");
+    if !header.exists() {
+        println!(
+            "cargo:warning=Netmap headers not found at {}; building empty bindings. \
+             Set NETMAP_LOCATION to enable Netmap support.",
+            header.display()
+        );
+        write_empty("Netmap headers not found; built empty bindings");
+        return;
+    }
+
     println!("cargo:warning=Linking against Netmap in: {}", install_dir);
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
@@ -79,4 +95,15 @@ fn main() {
         include_dir.display()
     );
     println!("cargo:rustc-env=NETMAP_LIB_PATH={}", lib_dir.display());
+}
+
+/// Write a minimal `binding.rs` (no Netmap symbols) and flip the
+/// `netmap_disabled` cfg so the hand-written types in `src/lib.rs` are gated
+/// out along with the generated bindings.
+fn write_empty(reason: &str) {
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    fs::write(out_path.join("binding.rs"), "// empty, Netmap disabled\n")
+        .expect("Failed to write empty bindings.rs");
+    println!("cargo:warning={}", reason);
+    println!("cargo:rustc-cfg=netmap_disabled");
 }

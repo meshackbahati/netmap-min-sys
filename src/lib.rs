@@ -20,7 +20,9 @@
 //! variable (defaulting to `/usr/local`), looking for headers in
 //! `$NETMAP_LOCATION/include`. When Netmap is not needed, enable the
 //! `disable-netmap-kernel` feature (or set `DISABLE_NETMAP_KERNEL`) to build an
-//! empty crate.
+//! empty crate. If the headers cannot be found at all (for example when the
+//! crate is built by crates.io or docs.rs, which never have Netmap installed),
+//! the build degrades to the same empty state automatically instead of failing.
 
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
@@ -28,16 +30,16 @@
 #![allow(dead_code)]
 #![allow(clippy::missing_safety_doc)]
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 mod bindings {
     include!(concat!(env!("OUT_DIR"), "/binding.rs"));
 }
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 pub use bindings::*;
 
 /// Export the helper types only when the netmap bindings are available.
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 pub mod exports {
     pub use super::bindings::NR_REG_ALL_NIC;
     pub use super::bindings::NR_REG_NIC_SW;
@@ -56,7 +58,7 @@ pub mod exports {
 // match the C headers exactly (verified with `offsetof`/`sizeof` on x86-64).
 // ---------------------------------------------------------------------------
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 /// A Netmap descriptor (`struct nm_desc` in `netmap_user.h`).
 ///
 /// This is the main handle returned by [`nm_open`] and used to reach the
@@ -106,7 +108,7 @@ pub struct nm_desc {
     pub msg: [core::ffi::c_char; NM_ERRBUF_SIZE as usize],
 }
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 /// Netmap packet header returned by the `nm_*` convenience helpers
 /// (`struct nm_pkthdr` in `netmap_user.h`).
 #[repr(C)]
@@ -121,7 +123,7 @@ pub struct nm_pkthdr {
     pub buf: *mut core::ffi::c_uchar,
 }
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 /// Netmap statistics (`struct nm_stat` in `netmap_user.h`).
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -135,7 +137,7 @@ pub struct nm_stat {
 // C shim linkage
 // ---------------------------------------------------------------------------
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 extern "C" {
     /// Open a Netmap port (see `netmap_user.h` `nm_open(4)`).
     ///
@@ -188,13 +190,13 @@ pub const NIOCCTRL: std::os::raw::c_ulong = 0xc058_6997;
 // API using `u32` values.
 // ---------------------------------------------------------------------------
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 /// Attach only the host (SW) rings. Legacy name for `NR_REG_SW`.
 pub const NR_REG_SW_ONLY: u32 = NR_REG_SW as u32;
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 /// Attach all NIC rings. Legacy name for `NR_REG_ALL_NIC`.
 pub const NR_REG_NIC_ONLY: u32 = NR_REG_ALL_NIC as u32;
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 /// Attach both NIC and host rings. Legacy name for `NR_REG_NIC_SW`.
 pub const NR_REG_NIC_AND_SW: u32 = NR_REG_NIC_SW as u32;
 
@@ -202,7 +204,7 @@ pub const NR_REG_NIC_AND_SW: u32 = NR_REG_NIC_SW as u32;
 // Function-like macros from netmap_user.h (bindgen does not emit macros).
 // ---------------------------------------------------------------------------
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 /// `NETMAP_TXRING(nifp, index)` — the TX ring at `index`, offset from the
 /// `netmap_if` pointer.
 ///
@@ -215,7 +217,7 @@ pub unsafe fn NETMAP_TXRING(nifp: *const netmap_if, index: u32) -> *mut netmap_r
     (nifp as *const u8).add(offset as usize) as *mut netmap_ring
 }
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 /// `NETMAP_RXRING(nifp, index)` — the RX ring at `index`, offset from the
 /// `netmap_if` pointer. RX rings start after all TX rings (HW + host).
 ///
@@ -233,7 +235,7 @@ pub unsafe fn NETMAP_RXRING(nifp: *const netmap_if, index: u32) -> *mut netmap_r
     (nifp as *const u8).add(offset as usize) as *mut netmap_ring
 }
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 /// `NETMAP_IF(base, ofs)` — the `netmap_if` at `ofs` bytes into the mapped
 /// memory region `base`.
 ///
@@ -244,7 +246,7 @@ pub unsafe fn NETMAP_IF(base: *const core::ffi::c_void, ofs: isize) -> *mut netm
     (base as *const u8).offset(ofs) as *mut netmap_if
 }
 
-#[cfg(not(feature = "disable-netmap-kernel"))]
+#[cfg(not(netmap_disabled))]
 /// `NETMAP_BUF(ring, index)` — pointer to buffer `index` inside `ring`'s buffer
 /// pool.
 ///
@@ -258,14 +260,15 @@ pub unsafe fn NETMAP_BUF(ring: *const netmap_ring, index: u32) -> *mut core::ffi
         .add(index as usize * (*ring).nr_buf_size as usize) as *mut core::ffi::c_void
 }
 
-#[cfg(feature = "disable-netmap-kernel")]
+#[cfg(netmap_disabled)]
 mod disabled {
-    /// Dummy stamp emitted only under `disable-netmap-kernel` so the crate is
-    /// not completely empty; use nothing from this module.
+    /// Dummy stamp emitted only when the crate is built without Netmap (via
+    /// `disable-netmap-kernel`, `DISABLE_NETMAP_KERNEL`, or missing headers) so
+    /// the crate is not completely empty; use nothing from this module.
     pub const NETMAP_DISABLED: bool = true;
 }
 
-#[cfg(all(test, not(feature = "disable-netmap-kernel")))]
+#[cfg(all(test, not(netmap_disabled)))]
 mod tests {
     use super::*;
     use core::mem;
